@@ -327,7 +327,7 @@ pub fn show_soon() {
 fn presenter_wanted() -> bool {
     match std::env::var("TSSM_PRESENTER") {
         Ok(value) => value != "0",
-        Err(_) => cfg!(target_os = "android"),
+        Err(_) => crate::MOBILE,
     }
 }
 
@@ -766,7 +766,7 @@ impl WindowSurface {
         let instance = new_instance();
         let surface = instance.create_surface(window.clone()).expect("cannot create surface");
         let size = move || {
-            let size = window.inner_size();
+            let size = crate::window_size(&window);
             (size.width, size.height)
         };
         WindowSurface { size: Arc::new(size), instance, surface }
@@ -831,7 +831,13 @@ impl Renderer {
         // runs too: a pipeline met again is then made in a fraction of the time.
         let required_features = adapter.features() & wgpu::Features::PIPELINE_CACHE;
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor { required_features, ..Default::default() })
+            // No more is asked for than the adapter has: the iOS simulator's falls short of
+            // the usual limits in ways the renderer does not depend on.
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features,
+                required_limits: wgpu::Limits::default().or_worse_values_from(&adapter.limits()),
+                ..Default::default()
+            })
             .await
             .expect("cannot open graphics device");
         eprintln!("[render] device ready");
@@ -874,10 +880,10 @@ impl Renderer {
             // and the camera are felt to lag by: there the newest frame replaces the one
             // waiting (no tearing), where the display can do that. The same goes for a game
             // that runs at the display's own rate or above it: a queue would fill and stall it.
-            let mailbox = (cfg!(target_os = "android") || presenter_wanted() || crate::host::frame_rate_unlocked())
+            let mailbox = (crate::MOBILE || presenter_wanted() || crate::host::frame_rate_unlocked())
                 && capabilities.present_modes.contains(&wgpu::PresentMode::Mailbox);
             config.present_mode = if mailbox { wgpu::PresentMode::Mailbox } else { wgpu::PresentMode::AutoVsync };
-            if cfg!(target_os = "android") || presenter_wanted() {
+            if crate::MOBILE || presenter_wanted() {
                 config.desired_maximum_frame_latency = 1;
             }
             eprintln!(

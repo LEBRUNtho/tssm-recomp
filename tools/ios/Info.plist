@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleExecutable</key><string>tssm</string>
+	<key>CFBundleIdentifier</key><string>@BUNDLE_ID@</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>SpongeBobMovie</string>
+	<key>CFBundleDisplayName</key><string>SpongeBob Movie</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>0.1</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>CFBundleSupportedPlatforms</key><array><string>iPhoneOS</string></array>
+	<key>CFBundleIcons</key>
+	<dict><key>CFBundlePrimaryIcon</key><dict>
+		<key>CFBundleIconFiles</key><array><string>AppIcon60x60</string></array>
+		<key>CFBundleIconName</key><string>AppIcon</string>
+	</dict></dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict><key>CFBundlePrimaryIcon</key><dict>
+		<key>CFBundleIconFiles</key><array><string>AppIcon60x60</string><string>AppIcon76x76</string></array>
+		<key>CFBundleIconName</key><string>AppIcon</string>
+	</dict></dict>
+	<key>LSRequiresIPhoneOS</key><true/>
+	<key>MinimumOSVersion</key><string>@MIN_IOS@</string>
+	<key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>
+	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string><string>metal</string></array>
+	<key>UIRequiresFullScreen</key><true/>
+	<key>UIStatusBarHidden</key><true/>
+	<key>UIViewControllerBasedStatusBarAppearance</key><false/>
+	<key>UILaunchScreen</key><dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+	<!-- 120 Hz on the iPhones that have it -->
+	<key>CADisableMinimumFrameDurationOnPhone</key><true/>
+	<!-- Saves, settings, texture packs and the log show in the Files app -->
+	<key>UIFileSharingEnabled</key><true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key><true/>
+	<key>GCSupportsControllerUserInteraction</key><true/>
+	<key>GCSupportedGameControllers</key>
+	<array><dict><key>ProfileName</key><string>ExtendedGamepad</string></dict></array>
+	<key>ITSAppUsesNonExemptEncryption</key><false/>
+</dict>
+</plist>

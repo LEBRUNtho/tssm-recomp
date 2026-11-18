@@ -23,3 +23,7 @@ zip = { version = "9.1.0", default-features = false, features = ["deflate-flate2
 winit = { version = "0.30.13", features = ["android-native-activity"] }
 # Rumble goes through the system's Vibrator, which has no native interface.
 jni = "0.21.1"
+
+# iOS: controllers are read through Apple's GameController framework (see ios.rs).
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6"

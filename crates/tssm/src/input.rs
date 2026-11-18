@@ -221,7 +221,7 @@ fn gamepad_update(state: Gamepad, connected: bool) {
 
 /// For platforms that read controllers themselves (Android): what the controller touched
 /// last holds, in the terms of `gamepad_from`.
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "android", target_os = "ios")), allow(dead_code))]
 pub fn set_gamepad(buttons: u32, stick: [f32; 2], camera: [f32; 2], triggers: [f32; 2]) {
     gamepad_update(gamepad_from(buttons, stick, camera, triggers), false);
 }
@@ -277,6 +277,7 @@ fn rumble_effect(gilrs: &mut gilrs::Gilrs) -> Option<gilrs::ff::Effect> {
 }
 
 /// Starts watching for gamepads on a thread of its own. They can be plugged in at any time.
+#[cfg_attr(target_os = "ios", allow(dead_code))]
 pub fn start_gamepads() {
     use gilrs::EventType;
     let watch = || {
@@ -392,7 +393,7 @@ static KEYBOARD_SINCE: AtomicU64 = AtomicU64::new(0);
 
 /// Whether the touch screen, rather than the keyboard and mouse, was used last. A phone
 /// starts out that way.
-static TOUCH_LAST: AtomicBool = AtomicBool::new(cfg!(target_os = "android"));
+static TOUCH_LAST: AtomicBool = AtomicBool::new(crate::MOBILE);
 
 /// Notes that the keyboard or the mouse was just used. The touch controls are put away.
 fn keyboard_used() {

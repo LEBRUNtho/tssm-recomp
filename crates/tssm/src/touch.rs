@@ -154,14 +154,14 @@ struct Touch {
 static TOUCH: Mutex<Touch> = Mutex::new(Touch { enabled: false, outlines_hidden: false, fingers: None });
 
 /// Shows the controls from the start.
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "android", target_os = "ios")), allow(dead_code))]
 pub fn enable() {
     TOUCH.lock().unwrap().enabled = true;
 }
 
 /// Puts the controls away until the screen is next touched: a physical controller is in use.
 /// Whether the touch controls are in use (no controller has taken over).
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "android", target_os = "ios")), allow(dead_code))]
 pub fn enabled() -> bool {
     TOUCH.lock().unwrap().enabled
 }

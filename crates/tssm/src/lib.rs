@@ -4,6 +4,8 @@
 
 #[cfg(target_os = "android")]
 mod android;
+#[cfg(target_os = "ios")]
+mod ios;
 mod aspect;
 mod audio;
 mod camera;
@@ -31,6 +33,10 @@ mod touch;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// A phone or a tablet: touch controls from the start, no mouse to take, and frames that
+/// must not queue up behind the display.
+pub(crate) const MOBILE: bool = cfg!(any(target_os = "android", target_os = "ios"));
+
 use render::WindowSurface;
 use runtime::Ctx;
 use winit::application::ApplicationHandler;
@@ -39,6 +45,17 @@ use winit::event::{DeviceEvent, DeviceId, ElementState, MouseScrollDelta, TouchP
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Fullscreen, Window, WindowId};
+
+/// The size of what the game draws into, in pixels. On iOS that is the whole screen: what
+/// winit calls the window's inner size there leaves out the notch and the home indicator's
+/// strips, which the picture and the fingers' positions both cover.
+pub(crate) fn window_size(window: &Window) -> winit::dpi::PhysicalSize<u32> {
+    if cfg!(target_os = "ios") {
+        window.outer_size()
+    } else {
+        window.inner_size()
+    }
+}
 
 /// Guest calls nest as native calls, and unoptimized recompiled frames are large.
 const GUEST_STACK: usize = 256 << 20;
@@ -260,10 +277,15 @@ impl ApplicationHandler for App {
         }
         // The whole screen the first time, and after that as it was last left.
         let windowed = std::fs::read_to_string(WINDOW_FILE).is_ok_and(|last| last.trim() == "windowed");
-        let attributes = Window::default_attributes()
-            .with_title("The SpongeBob SquarePants Movie")
-            .with_inner_size(LogicalSize::new(960.0, 720.0))
-            .with_fullscreen((!windowed).then(|| Fullscreen::Borderless(None)));
+        let attributes = Window::default_attributes().with_title("The SpongeBob SquarePants Movie");
+        // An iPhone's window is the screen; a size asked for would be taken at its word.
+        let attributes = if cfg!(target_os = "ios") {
+            attributes
+        } else {
+            attributes
+                .with_inner_size(LogicalSize::new(960.0, 720.0))
+                .with_fullscreen((!windowed).then(|| Fullscreen::Borderless(None)))
+        };
         // The exe's icon (build.rs) on the title bar and taskbar too, when the build had one.
         #[cfg(windows)]
         let attributes = {
@@ -273,8 +295,18 @@ impl ApplicationHandler for App {
                 Err(_) => attributes,
             }
         };
+        // An iPhone: the whole screen, on its side, without the system's bars over the game.
+        #[cfg(target_os = "ios")]
+        let attributes = {
+            use winit::platform::ios::{ScreenEdge, ValidOrientations, WindowAttributesExtIOS};
+            attributes
+                .with_valid_orientations(ValidOrientations::Landscape)
+                .with_prefers_home_indicator_hidden(true)
+                .with_prefers_status_bar_hidden(true)
+                .with_preferred_screen_edges_deferring_system_gestures(ScreenEdge::ALL)
+        };
         let window = Arc::new(event_loop.create_window(attributes).expect("cannot create window"));
-        let size = window.inner_size();
+        let size = window_size(&window);
         aspect::set_window(size.width, size.height);
         if let Some(rate) = window.current_monitor().and_then(|monitor| monitor.refresh_rate_millihertz()) {
             eprintln!("[window] the display runs at {:.2} Hz", rate as f64 / 1000.0);
@@ -298,7 +330,10 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, _event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => std::process::exit(0),
-            WindowEvent::Resized(size) => aspect::set_window(size.width, size.height),
+            WindowEvent::Resized(size) => {
+                let size = self.window.as_deref().map_or(size, window_size);
+                aspect::set_window(size.width, size.height)
+            }
             WindowEvent::ModifiersChanged(modifiers) => self.alt = modifiers.state().alt_key(),
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(key) = event.physical_key {
@@ -316,7 +351,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Touch(touch) => {
                 let Some(window) = &self.window else { return };
-                let size = window.inner_size();
+                let size = window_size(window);
                 let pressed = match touch.phase {
                     TouchPhase::Started | TouchPhase::Moved => true,
                     TouchPhase::Ended | TouchPhase::Cancelled => false,
@@ -329,7 +364,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let Some(window) = &self.window else { return };
-                let size = window.inner_size();
+                let size = window_size(window);
                 menu::cursor_moved((position.x as f32, position.y as f32), (size.width as f32, size.height as f32));
             }
             WindowEvent::CursorLeft { .. } => menu::cursor_left(),
@@ -353,7 +388,7 @@ impl ApplicationHandler for App {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         event_loop.set_control_flow(ControlFlow::wait_duration(std::time::Duration::from_millis(50)));
         // A phone has no cursor to take, and asking would fail every time.
-        if cfg!(target_os = "android") {
+        if MOBILE {
             return;
         }
         let wanted = self.focused && input::wants_mouse();
@@ -383,13 +418,17 @@ fn start_services() {
 /// Runs the window's event loop.
 fn start(disc: PathBuf, event_loop: EventLoop<()>) {
     start_services();
+    #[cfg(not(target_os = "ios"))]
     input::start_gamepads();
+    #[cfg(target_os = "ios")]
+    ios::start_gamepads();
     let mut app = App { disc, window: None, instance: None, focused: false, captured: false, alt: false };
     event_loop.run_app(&mut app).expect("event loop failed");
 }
 
 /// Without a disc folder given, the game's files (disc, config, saves) are the ones next to
 /// the executable: Windows search and shortcuts can start it from another folder.
+#[cfg_attr(target_os = "ios", allow(dead_code))]
 fn enter_game_folder() {
     let here = std::path::Path::new("disc/sys/main.dol");
     if here.exists() {
@@ -429,6 +468,15 @@ fn message_box(_title: &str, _text: &str, _kind: u32) -> i32 {
     0
 }
 
+/// iOS: the game's files are in the app's Documents folder or in the app itself (see ios.rs).
+#[cfg(target_os = "ios")]
+pub fn main() {
+    let disc = ios::prepare();
+    touch::enable();
+    start(disc, EventLoop::new().expect("cannot create event loop"));
+}
+
+#[cfg(not(target_os = "ios"))]
 pub fn main() {
     if std::env::args().nth(1).is_none() {
         enter_game_folder();
