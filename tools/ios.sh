@@ -11,6 +11,13 @@
 # The app carries the game's files (the extracted disc), so it is for your own devices only:
 # never share an app or an .ipa built this way.
 #
+# Optional, as environment variables:
+#   PACK=<zip>   a texture pack in Dolphin's format to package with the app (such as the Xbox
+#                version's textures, https://gamebanana.com/mods/648590); packs can also be
+#                put in the app's textures folder afterwards, in the Files app
+#   ICON=<png>   a square picture for the app's icon, instead of the badge from the disc
+#   APP_NAME=... the name under the icon
+#
 # Signing: without settings the app is signed ad hoc, for a sideloading tool that signs it
 # again (AltStore, Sideloadly, Feather...). For your own certificate, put these in
 # ~/.config/tssm-ios/signature.sh (kept out of the repository):
@@ -78,12 +85,14 @@ xcrun strip -x "$APP/tssm"
 if [[ $MODE = sim* ]]; then PLATFORM=iossim; else PLATFORM=ios; fi
 xcrun vtool -set-build-version $PLATFORM $MIN_IOS $LEGACY_SDK -replace -output "$APP/tssm" "$APP/tssm" 2>/dev/null
 sed -e "s/@BUNDLE_ID@/$BUNDLE_ID/" -e "s/@MIN_IOS@/$MIN_IOS/" tools/ios/Info.plist > "$APP/Info.plist"
-# The name under the icon: the game's own title in the version's language.
+# The name under the icon: the game's own title in the version's language, unless given.
 case $VERSION in
-  eur) plutil -replace CFBundleDisplayName -string "Bob l'éponge" "$APP/Info.plist";;
+  eur) : ${APP_NAME:="Bob l'éponge"};;
 esac
-# The icon is the game's own badge, taken from the disc.
-if python3 tools/ios/icon.py "$DISC" "$OUT/icon-$VERSION.png"; then
+[ -n "$APP_NAME" ] && plutil -replace CFBundleDisplayName -string "$APP_NAME" "$APP/Info.plist"
+# The icon is the game's own badge, taken from the disc, unless one is given.
+if [ -n "$ICON" ]; then cp "$ICON" "$OUT/icon-$VERSION.png"; else python3 tools/ios/icon.py "$DISC" "$OUT/icon-$VERSION.png"; fi
+if [ -f "$OUT/icon-$VERSION.png" ]; then
   for icon in "AppIcon60x60@2x 120" "AppIcon60x60@3x 180" "AppIcon76x76@2x~ipad 152" "AppIcon83.5x83.5@2x~ipad 167"; do
     sips -z ${icon#* } ${icon#* } "$OUT/icon-$VERSION.png" --out "$APP/${icon% *}.png" >/dev/null
   done
@@ -93,6 +102,10 @@ fi
 plutil -convert binary1 "$APP/Info.plist"
 # The game's files, without the copy of its code that only the build reads.
 rsync -a --delete --exclude '/files/sb04gc_nm.elf' "$DISC/" "$APP/disc/"
+if [ -n "$PACK" ]; then
+  mkdir -p "$APP/textures" && cp "$PACK" "$APP/textures/"
+  echo "   with the texture pack ${PACK:t}"
+fi
 
 echo "== Signing"
 if [[ $MODE = sim* ]]; then

@@ -30,6 +30,15 @@ struct Pack {
 
 static PACK: OnceLock<Option<Pack>> = OnceLock::new();
 
+/// A second folder of packs, for platforms whose app carries one (iOS).
+static OTHER_FOLDER: OnceLock<PathBuf> = OnceLock::new();
+
+/// Has packs looked for in `folder` as well; to be called before the game starts.
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub fn also_look_in(folder: PathBuf) {
+    let _ = OTHER_FOLDER.set(folder);
+}
+
 /// Whether a pack was found, so that its hashing can be skipped when not.
 pub fn active() -> bool {
     PACK.get_or_init(load).is_some()
@@ -134,6 +143,9 @@ fn load() -> Option<Pack> {
     let mut pack = Pack { entries: HashMap::new(), zips: Vec::new() };
     let mut files = Vec::new();
     collect(Path::new(FOLDER), &mut files);
+    if let Some(other) = OTHER_FOLDER.get() {
+        collect(other, &mut files);
+    }
     for path in files {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
         if name.to_ascii_lowercase().ends_with(".zip") {
@@ -158,7 +170,7 @@ fn load() -> Option<Pack> {
     if count == 0 {
         return None;
     }
-    eprintln!("[pack] {count} replacement textures in {FOLDER}");
+    eprintln!("[pack] {count} replacement textures");
     Some(pack)
 }
 
