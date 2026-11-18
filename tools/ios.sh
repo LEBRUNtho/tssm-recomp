@@ -80,8 +80,19 @@ xcrun strip -x "$APP/tssm"
 if [[ $MODE = sim* ]]; then PLATFORM=iossim; else PLATFORM=ios; fi
 xcrun vtool -set-build-version $PLATFORM $MIN_IOS $LEGACY_SDK -replace -output "$APP/tssm" "$APP/tssm" 2>/dev/null
 sed -e "s/@BUNDLE_ID@/$BUNDLE_ID/" -e "s/@MIN_IOS@/$MIN_IOS/" tools/ios/Info.plist > "$APP/Info.plist"
+# The name under the icon: the game's own title in the version's language.
+case $VERSION in
+  eur) plutil -replace CFBundleDisplayName -string "Bob l'éponge" "$APP/Info.plist";;
+esac
+# The icon is the game's own badge, taken from the disc.
+if python3 tools/ios/icon.py "$DISC" "$OUT/icon-$VERSION.png"; then
+  for icon in "AppIcon60x60@2x 120" "AppIcon60x60@3x 180" "AppIcon76x76@2x~ipad 152" "AppIcon83.5x83.5@2x~ipad 167"; do
+    sips -z ${icon#* } ${icon#* } "$OUT/icon-$VERSION.png" --out "$APP/${icon% *}.png" >/dev/null
+  done
+else
+  echo "   (no icon)"
+fi
 plutil -convert binary1 "$APP/Info.plist"
-[ -d "$OUT/icon-$VERSION" ] && cp "$OUT/icon-$VERSION"/AppIcon*.png "$APP/" 2>/dev/null || true
 # The game's files, without the copy of its code that only the build reads.
 rsync -a --delete --exclude '/files/sb04gc_nm.elf' "$DISC/" "$APP/disc/"
 

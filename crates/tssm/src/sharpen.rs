@@ -36,7 +36,8 @@ pub fn find(files: &Path) {
         let mut found = HashMap::new();
         // The fonts: the paletted textures of 128 texels or more in font.HIP; the rest of it
         // is button pictures and a background.
-        if let Ok(data) = std::fs::read(files.join("font.HIP")) {
+        // The European version has a file more for each of its languages.
+        for data in ["font.HIP", "font_FR.hip", "font_NL.hip"].iter().filter_map(|name| std::fs::read(files.join(name)).ok()) {
             for at in (0..data.len()).step_by(4) {
                 found.extend(
                     texture_at(&data, at)

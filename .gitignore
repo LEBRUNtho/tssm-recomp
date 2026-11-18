@@ -26,3 +26,6 @@ config/fov.txt
 /The SpongeBob Movie Game.exe
 /textures/
 /*.zip
+
+# iOS build output
+/build/
