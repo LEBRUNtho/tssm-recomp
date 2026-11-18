@@ -33,8 +33,26 @@ use crate::input;
 #[link(name = "GameController", kind = "framework")]
 extern "C" {}
 
+#[link(name = "AVFAudio", kind = "framework")]
+extern "C" {
+    static AVAudioSessionCategoryPlayback: *mut AnyObject;
+}
+
 extern "C" {
     fn dup2(from: i32, to: i32) -> i32;
+}
+
+/// Has the game heard with the ring switch on silent, as a console's would be: left alone,
+/// iOS takes an app's sound for interface noises and mutes it with the switch.
+fn sound_through_silent_switch() {
+    // SAFETY: AVAudioSession's own messages, with the types its headers give them.
+    unsafe {
+        let session: *mut AnyObject = msg_send![class!(AVAudioSession), sharedInstance];
+        let ok: Bool = msg_send![session, setCategory: AVAudioSessionCategoryPlayback, error: std::ptr::null_mut::<*mut AnyObject>()];
+        if !ok.as_bool() {
+            eprintln!("[sound] the audio session keeps its default category");
+        }
+    }
 }
 
 /// Enters the Documents folder, sends the log to a file there, reads env.txt, and returns
@@ -68,6 +86,7 @@ pub fn prepare() -> PathBuf {
             None => {}
         }
     }
+    sound_through_silent_switch();
     let _ = std::fs::create_dir_all("saves");
     let _ = std::fs::create_dir_all("config");
 

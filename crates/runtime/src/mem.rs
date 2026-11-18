@@ -64,10 +64,21 @@ pub const WGPIPE: u32 = 0xCC00_8000;
 /// Reserves the guest address space and returns its base pointer. Never freed.
 pub fn alloc_guest_memory() -> *mut u8 {
     unsafe {
-        let base = sys::reserve(1 << 32);
-        assert!(!base.is_null(), "cannot reserve 4 GB of address space for the guest");
-        assert!(sys::commit(base.add(RAM_BASE as usize), RAM_SIZE as usize), "cannot commit guest RAM");
-        assert!(sys::commit(base.add(HW_BASE as usize), HW_SIZE as usize), "cannot commit hardware registers");
+        let mut base = sys::reserve(1 << 32);
+        if base.is_null() {
+            // A system that keeps a process's address space small (iOS, on some devices)
+            // may refuse 4 GB. What the guest uses lies between its RAM and the end of the
+            // hardware registers; reserving that much alone, a guest address is still a
+            // plain offset from a base, which now lies below the reservation. A stray
+            // address under the RAM is then not sure to fault.
+            let span = (HW_BASE + HW_SIZE - RAM_BASE) as usize + (1 << 16);
+            let low = sys::reserve(span);
+            assert!(!low.is_null(), "cannot reserve address space for the guest");
+            eprintln!("[mem] 4 GB of address space refused; reserved {} MB instead", span >> 20);
+            base = low.wrapping_sub(RAM_BASE as usize);
+        }
+        assert!(sys::commit(base.wrapping_add(RAM_BASE as usize), RAM_SIZE as usize), "cannot commit guest RAM");
+        assert!(sys::commit(base.wrapping_add(HW_BASE as usize), HW_SIZE as usize), "cannot commit hardware registers");
         fault::install(base);
         base
     }

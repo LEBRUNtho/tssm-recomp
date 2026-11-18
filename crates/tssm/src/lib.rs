@@ -209,16 +209,49 @@ fn spawn_call_sampler() {
     });
 }
 
+/// Starts `run` on a thread with a stack of `size` bytes, or leaves it in place if the system
+/// will not make one.
+pub(crate) fn big_stack_thread<F: FnOnce() + Send + 'static>(
+    name: &str,
+    size: usize,
+    run: &mut Option<F>,
+) -> Option<std::thread::JoinHandle<()>> {
+    extern "C" {
+        fn mmap(addr: *mut u8, len: usize, prot: i32, flags: i32, fd: i32, off: i64) -> *mut u8;
+        fn munmap(addr: *mut u8, len: usize) -> i32;
+    }
+    // Starting a thread uses up what it was to run even when it fails, so whether the system
+    // has room for the stack is tried first where that is in doubt.
+    #[cfg(target_vendor = "apple")]
+    unsafe {
+        let probe = mmap(std::ptr::null_mut(), size, 3, 0x02 | 0x1000, -1, 0);
+        if probe as isize == -1 {
+            eprintln!("[thread] no room for a {} MB stack for {name}", size >> 20);
+            return None;
+        }
+        munmap(probe, size);
+    }
+    #[cfg(not(target_vendor = "apple"))]
+    let _ = (mmap as usize, munmap as usize);
+    let body = run.take()?;
+    Some(std::thread::Builder::new().name(name.into()).stack_size(size).spawn(body).expect("cannot start a thread"))
+}
+
 /// Runs the game on its own large-stack thread; the process ends when the game does.
 fn spawn_guest(disc: PathBuf, window: Option<WindowSurface>) -> std::thread::JoinHandle<()> {
-    std::thread::Builder::new()
-        .name("guest".into())
-        .stack_size(GUEST_STACK)
-        .spawn(move || {
-            let ok = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(disc, window))).is_ok();
-            std::process::exit(if ok { 0 } else { 1 });
-        })
-        .unwrap()
+    // A system may refuse a stack this large (iOS); optimized builds get by with far less.
+    let mut start = Some(move || {
+        let ok = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(disc, window))).is_ok();
+        std::process::exit(if ok { 0 } else { 1 });
+    });
+    let mut size = GUEST_STACK;
+    loop {
+        match big_stack_thread("guest", size, &mut start) {
+            Some(handle) => return handle,
+            None if size > 8 << 20 => size /= 2,
+            None => panic!("cannot start the game's thread"),
+        }
+    }
 }
 
 /// Where "fullscreen" or "windowed" is kept between runs (relative to the working folder).
