@@ -33,7 +33,11 @@ mod sys {
     const PROT_NONE: i32 = 0;
     const PROT_READ_WRITE: i32 = 3;
     // MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE (Linux/Android values)
+    #[cfg(not(target_vendor = "apple"))]
     const MAP_FLAGS: i32 = 0x02 | 0x20 | 0x4000;
+    // The same three on macOS and iOS, where the numbers differ.
+    #[cfg(target_vendor = "apple")]
+    const MAP_FLAGS: i32 = 0x02 | 0x1000 | 0x40;
 
     pub unsafe fn reserve(size: usize) -> *mut u8 {
         let p = mmap(std::ptr::null_mut(), size, PROT_NONE, MAP_FLAGS, -1, 0);
