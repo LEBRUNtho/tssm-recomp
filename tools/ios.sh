@@ -52,10 +52,10 @@ echo "   $ID revision $REVISION ($VERSION)"
 
 echo "== Recompiling the game's code"
 GEN=crates/game/src/gen
-WANTED="$SHA $(shasum config/hle.txt | cut -d' ' -f1)"
+WANTED="$SHA $(cat config/hle.txt config/addresses.txt | shasum | cut -d' ' -f1)"
 if [ "$(cat $GEN/.source 2>/dev/null)" != "$WANTED" ]; then
   mkdir -p $GEN
-  cargo run -q -p recomp --release --bin recomp -- "$ELF" config/hle.txt $GEN
+  cargo run -q -p recomp --release --bin recomp -- "$ELF" config/hle.txt $GEN $ID
   echo "$WANTED" > $GEN/.source
 else
   echo "   up to date"

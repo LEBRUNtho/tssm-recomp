@@ -247,9 +247,9 @@ fn video_policy(name: &str) -> Option<Hle> {
     })
 }
 
-/// The game's gGameMode and gGameState variables (this build: GGVE78 revision 1).
-const GAME_MODE: u32 = 0x804B_0D54;
-const GAME_STATE: u32 = 0x804B_01EC;
+/// The game's gGameMode and gGameState variables.
+const GAME_MODE: u32 = game::at::GAME_MODE;
+const GAME_STATE: u32 = game::at::GAME_STATE;
 
 /// PADRead(PADStatus status[4]): controller 1 is the keyboard, ports 2-4 are empty.
 /// PADStatus is 12 bytes with the error code in byte 10.
@@ -274,8 +274,8 @@ fn pad_read(c: &mut Ctx) {
 /// TSSM_TRACE_PLAYER=1 logs the time in seconds and the player's position at every pad
 /// poll (once a frame), to compare how the game moves at different frame rates.
 fn trace_player(c: &mut Ctx) {
-    /// Where the game keeps the pointer to the player's entity (this build: GGVE78 revision 1).
-    const PLAYER: u32 = 0x804B_04A0;
+    /// Where the game keeps the pointer to the player's entity.
+    const PLAYER: u32 = game::at::XGLOBALS;
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if !*ON.get_or_init(|| std::env::var_os("TSSM_TRACE_PLAYER").is_some()) || c.r32(GAME_MODE) != 12 {
         return;
@@ -291,7 +291,7 @@ fn trace_player(c: &mut Ctx) {
     }
     // The car of the driving levels (zEntPlayerCarGetCar): position from its matrix at 0x50,
     // then its velocity at 0xA8.
-    const CAR: u32 = 0x8040_6860;
+    const CAR: u32 = game::at::PLAYER_CAR;
     let car = |o: u32| f32::from_bits(c.r32(CAR + o));
     if car(0x80) != 0.0 || car(0x88) != 0.0 {
         let seconds = c.timebase() as f64 / host::TICKS_PER_SECOND as f64;
@@ -307,7 +307,7 @@ fn trace_player(c: &mut Ctx) {
 fn upgrades(c: &mut Ctx) {
     /// The game's `globals`; the move levels are eight bytes at 0xAD9 (2 is upgraded) and
     /// the two characters' health levels follow (3 is the most).
-    const GLOBALS: u32 = 0x804A_DA80;
+    const GLOBALS: u32 = game::at::GLOBALS;
     const IN_GAME: u32 = 12;
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     static SETTLED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -341,7 +341,7 @@ fn upgrade_points(c: &mut Ctx) {
     static FRAMES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let Some(points) = *POINTS.get_or_init(|| std::env::var("TSSM_UPGRADE_POINTS").ok()?.parse().ok()) else { return };
     if c.r32(GAME_MODE) == 12 && FRAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) == 60 {
-        c.w16(0x804A_DA80 + 0x1EC8, points);
+        c.w16(game::at::GLOBALS + 0x1EC8, points);
         eprintln!("[cheat] {points} upgrade points");
     }
 }
@@ -363,8 +363,8 @@ fn upgrade_points(c: &mut Ctx) {
 /// So a thread arriving while another is asleep in here waits a retrace at a time until the
 /// other has gone, as it always has on the console.
 fn before_show_raster(c: &mut Ctx) {
-    /// RenderWare's thread queue for the frame queue (this build: GGVE78 revision 1).
-    const FRAME_QUEUE_SLEEPERS: u32 = 0x804B_23C0;
+    /// RenderWare's thread queue for the frame queue.
+    const FRAME_QUEUE_SLEEPERS: u32 = game::at::FRAME_QUEUE_SLEEPERS;
     if !sched::has_sleepers(FRAME_QUEUE_SLEEPERS) {
         return;
     }
@@ -383,11 +383,11 @@ fn before_show_raster(c: &mut Ctx) {
 /// busy for most of every frame. The wait is done here instead, asleep until the retrace
 /// that shows the frame; the function then finds nothing left to wait for.
 fn before_get_xfbs(c: &mut Ctx) {
-    /// RenderWare's frame queue (this build: GGVE78 revision 1): whether a frame is being
+    /// RenderWare's frame queue: whether a frame is being
     /// handed to the display, and the positions frames are submitted at and shown from.
-    const HANDING_OVER: u32 = 0x804B_23AC;
-    const SUBMITTED: u32 = 0x804B_23A0;
-    const SHOWN: u32 = 0x804B_23A4;
+    const HANDING_OVER: u32 = game::at::FRAME_HANDING_OVER;
+    const SUBMITTED: u32 = game::at::FRAME_SUBMITTED;
+    const SHOWN: u32 = game::at::FRAME_SHOWN;
     let waiting = |c: &Ctx| c.r32(HANDING_OVER) == 1 || c.r32(SUBMITTED) != c.r32(SHOWN);
     if !waiting(c) || host::in_handler() {
         return;
@@ -404,7 +404,7 @@ fn before_get_xfbs(c: &mut Ctx) {
 /// Runs in place of GXCallDisplayList(list, size): the game's own function is run, and then
 /// the decoder takes down the list's vertices as they are at this moment (`Gx::look_ahead`).
 fn call_display_list(c: &mut Ctx) -> bool {
-    const GX_CALL_DISPLAY_LIST: u32 = 0x802E_F450;
+    const GX_CALL_DISPLAY_LIST: u32 = game::at::GX_CALL_DISPLAY_LIST;
     thread_local! {
         static INSIDE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     }
@@ -619,6 +619,8 @@ pub fn policy(name: &str) -> Hle {
 
         // Console settings and registration hooks with nothing behind them here.
         "OSGetSoundMode" => Hle::Native(|c| c.r[3] = 1), // stereo
+        // The console's language setting, which the European versions go by.
+        "OSGetLanguage" => Hle::Native(|c| c.r[3] = language()),
         "OSGetFontEncode" | "OSInitFont" | "PPCMfhid2" => Hle::Native(|c| c.r[3] = 0),
         "OSSetSoundMode" | "OSRegisterVersion" | "OSRegisterResetFunction" | "PPCMthid2" | "PPCMtwpar" => {
             Hle::Native(nop)
@@ -637,4 +639,33 @@ pub fn policy(name: &str) -> Hle {
         }
         _ => Hle::Unimplemented,
     }
+}
+
+/// The console's language setting, as OSGetLanguage gives it: 0 English, 1 German, 2 French,
+/// 3 Spanish, 4 Italian, 5 Dutch. TSSM_LANGUAGE or config/language.txt says which (a name's
+/// first two letters or the number); otherwise it is the system's language, or English.
+fn language() -> u32 {
+    static LANGUAGE: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *LANGUAGE.get_or_init(|| {
+        let code = |text: &str| -> Option<u32> {
+            let text = text.trim().to_ascii_lowercase();
+            match text.get(..2).unwrap_or(&text) {
+                "en" | "0" => Some(0),
+                "de" | "ge" | "1" => Some(1),
+                "fr" | "2" => Some(2),
+                "es" | "sp" | "3" => Some(3),
+                "it" | "4" => Some(4),
+                "nl" | "du" | "5" => Some(5),
+                _ => None,
+            }
+        };
+        let chosen = std::env::var("TSSM_LANGUAGE").ok().or_else(|| std::fs::read_to_string("config/language.txt").ok());
+        let language = chosen
+            .as_deref()
+            .and_then(code)
+            .or_else(|| crate::system_language().as_deref().and_then(code))
+            .unwrap_or(0);
+        eprintln!("[os] console language {language}");
+        language
+    })
 }

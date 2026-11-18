@@ -142,7 +142,7 @@ pub enum Event {
 /// every retrace, so they run at 60 like the other levels; the game steps by the time that
 /// has passed, so its speed does not change. TSSM_ORIGINAL_FPS=1 leaves the game's cap alone.
 fn uncap_frame_rate(c: &mut Ctx) {
-    const RETRACE_MIN_COUNT: u32 = 0x804B_0889;
+    const RETRACE_MIN_COUNT: u32 = game::at::RETRACE_MIN_COUNT;
     static KEEP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     if !*KEEP.get_or_init(|| std::env::var_os("TSSM_ORIGINAL_FPS").is_some()) && c.r8(RETRACE_MIN_COUNT) > 1 {
         c.w8(RETRACE_MIN_COUNT, 1);

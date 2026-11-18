@@ -396,9 +396,8 @@ pub fn filter_pad(status: &mut [u8]) {
 
 /// All the game's widgets, shown or not, of one type: address and place.
 fn all_widgets(c: &Ctx, kind: u8) -> Vec<(u32, u32, [f32; 4])> {
-    const WIDGETS: u32 = 0x8040_72C0;
-    const WIDGET_COUNT: u32 = 0xFFFF_93D0;
-    let count = c.r32(c.r[13].wrapping_add(WIDGET_COUNT)).min(1024);
+    const WIDGETS: u32 = game::at::UI_WIDGETS;
+    let count = c.r32(game::at::UI_WIDGET_COUNT).min(1024);
     let f = |addr: u32| f32::from_bits(c.r32(addr));
     (0..count)
         .map(|i| c.r32(WIDGETS + i * 4))

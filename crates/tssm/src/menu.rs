@@ -37,9 +37,9 @@ use runtime::Ctx;
 
 use crate::glyph::Button;
 
-/// The UI manager's list of widgets and (in the small data area) its length.
-const WIDGETS: u32 = 0x8040_72C0;
-const WIDGET_COUNT: u32 = 0xFFFF_93D0;
+/// The UI manager's list of widgets and its length.
+const WIDGETS: u32 = game::at::UI_WIDGETS;
+const WIDGET_COUNT: u32 = game::at::UI_WIDGET_COUNT;
 
 /// TSSM_TRACE_UI=1: every two seconds, lists the widgets that are enabled and visible.
 fn trace(c: &Ctx) {
@@ -51,7 +51,7 @@ fn trace(c: &Ctx) {
     if CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 120 != 0 {
         return;
     }
-    let count = c.r32(c.r[13].wrapping_add(WIDGET_COUNT));
+    let count = c.r32(WIDGET_COUNT);
     eprintln!("[ui] {count} widgets at retrace {}", crate::host::RETRACE_COUNT.load(std::sync::atomic::Ordering::Relaxed));
     let f = |addr: u32| f32::from_bits(c.r32(addr));
     for i in 0..count.min(512) {
@@ -95,7 +95,7 @@ const FOCUS_OFF: u16 = 82;
 pub(crate) const FOCUS_ON_SELECT: u16 = 94;
 pub(crate) const FOCUS_OFF_UNSELECT: u16 = 95;
 /// zEntEvent(from, fromEvent, to, toEvent, params, paramWidget, toParamWidget, force)
-const SEND_EVENT: u32 = 0x801C_9550;
+const SEND_EVENT: u32 = game::at::UI_SEND_EVENT;
 
 /// What the window thread has seen of the mouse since the game last looked.
 struct Pointer {
@@ -241,7 +241,7 @@ fn on_show(c: &Ctx) -> Vec<Widget> {
 
 /// The widgets that are enabled and visible, with or without the fully transparent ones.
 fn listed(c: &Ctx, transparent: bool) -> Vec<Widget> {
-    let count = c.r32(c.r[13].wrapping_add(WIDGET_COUNT)).min(1024);
+    let count = c.r32(WIDGET_COUNT).min(1024);
     let f = |addr: u32| f32::from_bits(c.r32(addr));
     (0..count)
         .map(|i| c.r32(WIDGETS + i * 4))
@@ -270,8 +270,8 @@ pub(crate) fn send(c: &mut Ctx, to: u32, event: u16) {
 
 /// xStrHash(const char *) and xSTFindAsset(id, size *): the game's name hashing and its lookup
 /// of a loaded asset by hashed name.
-const STR_HASH: u32 = 0x8022_2788;
-const FIND_ASSET: u32 = 0x8022_3130;
+const STR_HASH: u32 = game::at::STR_HASH;
+const FIND_ASSET: u32 = game::at::FIND_ASSET;
 /// Where in the host's scratch block a name is put for the game to hash.
 const NAME_SCRATCH: u32 = 0xD80;
 /// A text widget's base type, and where it keeps the address of its text's characters.
@@ -377,7 +377,7 @@ const OPTIONS_HINT: u32 = 0x8CAD_1203;
 const UPGRADE_HINT: u32 = 0x3ABD_D395;
 const RETURN_HINT: u32 = 0x6EBF_D80A;
 /// zUIText::DoRender()
-const RENDER_TEXT: u32 = 0x8018_53DC;
+const RENDER_TEXT: u32 = game::at::UI_RENDER_TEXT;
 /// Where in the host's scratch block hints' texts without their pictures are kept, a slot
 /// for each hint drawn in a frame.
 const HINT_SCRATCH: u32 = 0xA00;
@@ -554,9 +554,9 @@ const GLOW_WIDEST: f32 = 250.0;
 const ICON_TOP: f32 = -28.0;
 const ICON_BOTTOM: f32 = 38.0;
 /// zUIImage::DoRender()
-pub(crate) const RENDER_IMAGE: u32 = 0x8018_6D6C;
+pub(crate) const RENDER_IMAGE: u32 = game::at::UI_RENDER_IMAGE;
 /// zUIModel::DoRender()
-const RENDER_MODEL: u32 = 0x8018_5B58;
+const RENDER_MODEL: u32 = game::at::UI_RENDER_MODEL;
 
 /// Whether the mouse has moved since a key was last pressed: the level select screen's
 /// challenges then follow the cursor.
@@ -646,7 +646,7 @@ fn steer_challenges(row: &Row, at: Option<(f32, f32)>) -> Option<usize> {
 fn choose_challenge(c: &mut Ctx, row: &Row, holders: &[Widget], target: usize) {
     let name = holders.iter().find(|holder| links(c, holder.addr).iter().any(|(received, ..)| [75, 76].contains(received)));
     let wanted = name.map(|name| name.id.wrapping_add(target as u32).wrapping_sub(row.chosen as u32));
-    let count = c.r32(c.r[13].wrapping_add(WIDGET_COUNT)).min(1024);
+    let count = c.r32(WIDGET_COUNT).min(1024);
     let found = wanted.and_then(|id| (0..count).map(|i| c.r32(WIDGETS + i * 4)).find(|&ui| (0x8000_0000..0x8180_0000).contains(&ui) && c.r32(ui) == id));
     let mut tried = STEPS_TRIED.lock().unwrap();
     if let (Some(name), Some(found)) = (name, found) {

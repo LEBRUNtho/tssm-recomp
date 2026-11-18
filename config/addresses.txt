@@ -1,0 +1,54 @@
+# What the host knows of the game's own code and data, by symbol. One entry per line:
+#   NAME symbol            the symbol's address
+#   NAME symbol+0xOFFSET   an address inside it
+#   NAME@GGVX78 ...        the same for that version of the game alone, where it differs
+# The recompiler looks each symbol up in the game's ELF and writes the addresses out as
+# constants (game::at::NAME), so the same host builds against any version that has them.
+
+# Game state (hle.rs)
+GAME_MODE               gGameMode
+GAME_STATE              gGameState
+XGLOBALS                xglobals
+GLOBALS                 globals
+PLAYER_CAR              playerCar
+
+# RenderWare's frame queue (hle.rs, host.rs)
+FRAME_QUEUE_SLEEPERS    _RwDlWaitingDoneRender
+FRAME_HANDING_OVER      _RwDlFrameReadyOnToken
+FRAME_SUBMITTED         _RwDlFrameTokenNew
+FRAME_SHOWN             _RwDlFrameTokenCurrent
+RETRACE_MIN_COUNT       _RwDlRetraceMinCount
+GX_CALL_DISPLAY_LIST    GXCallDisplayList
+
+# Camera (camera.rs)
+CAMERA_UPDATE           zCameraUpdate__FP7xCameraf
+CAMERA_UPDATE_END       zCameraIsFlyCamRunning__Fv
+CAMERA_INPUT_ENABLED    input_enabled__19@unnamed@zWad1_cpp@
+CAMERA_PITCH_S          pitch_s$2559
+CAMERA_BBOUNCE          zcam_bbounce
+CAMERA_HIGHBOUNCE       zcam_highbounce
+CAMERA_LONGBOUNCE       zcam_longbounce
+CAMERA_STOP_TRACK       stop_track__19@unnamed@zWad1_cpp@
+CAMERA_LASSO_FACTOR     lassocam_factor__19@unnamed@zWad1_cpp@
+CAMERA_TWEAK_COUNT      sCamTweakCount
+CAMERA_PITCH            sCamPitch
+CAMERA_WALL_JUMP        wall_jump_enabled__19@unnamed@zWad1_cpp@
+
+# Driving levels (car.rs)
+CAR_UPDATE              CarUpdate__4zCarFffbbb
+
+# Save menu (card.rs)
+SAVE_MENU_DISPATCH      zSaveLoad_DispatchCB__FUiPCf
+SAVE_SLOT_SCREEN_WAIT   zSaveLoad_CardPick__Fi+0x678
+SAVE_MENU_SLOT          currentCard
+SAVE_MENU_ANSWER        saveLoadPromptSel
+
+# Menus (menu.rs, options.rs)
+UI_WIDGETS              uiElements__20@unnamed@zWadUI_cpp@
+UI_WIDGET_COUNT         uiElementCount__20@unnamed@zWadUI_cpp@
+UI_SEND_EVENT           zEntEvent__FP5xBaseUiP5xBaseUiPCfP5xBaseUi10ForceEvent
+UI_RENDER_TEXT          DoRender__7zUITextCFv
+UI_RENDER_IMAGE         DoRender__8zUIImageCFv
+UI_RENDER_MODEL         DoRender__8zUIModelCFv
+STR_HASH                xStrHash__FPCc
+FIND_ASSET              xSTFindAsset__FUiPUi

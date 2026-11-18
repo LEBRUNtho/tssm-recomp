@@ -105,6 +105,24 @@ pub fn prepare() -> PathBuf {
     }
 }
 
+/// The first of the languages the phone is set to, as "fr-FR".
+pub fn language() -> Option<String> {
+    // SAFETY: Foundation's own messages; the strings are copied before the pool is drained.
+    autoreleasepool(|_| unsafe {
+        let languages: *mut AnyObject = msg_send![class!(NSLocale), preferredLanguages];
+        if languages.is_null() {
+            return None;
+        }
+        let count: usize = msg_send![languages, count];
+        if count == 0 {
+            return None;
+        }
+        let first: *mut AnyObject = msg_send![languages, objectAtIndex: 0usize];
+        let text: *const std::ffi::c_char = msg_send![first, UTF8String];
+        (!text.is_null()).then(|| std::ffi::CStr::from_ptr(text).to_string_lossy().into_owned())
+    })
+}
+
 /// A controller's state in the terms `input::set_gamepad` takes.
 #[derive(Clone, Copy, PartialEq, Default)]
 struct Pad {

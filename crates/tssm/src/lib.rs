@@ -57,6 +57,14 @@ pub(crate) fn window_size(window: &Window) -> winit::dpi::PhysicalSize<u32> {
     }
 }
 
+/// The language the system is set to, as a code that starts with its two letters ("fr-FR").
+pub(crate) fn system_language() -> Option<String> {
+    #[cfg(target_os = "ios")]
+    return ios::language();
+    #[cfg(not(target_os = "ios"))]
+    ["LC_ALL", "LC_MESSAGES", "LANG"].iter().find_map(|name| std::env::var(name).ok().filter(|value| value.len() >= 2 && value != "C" && value != "POSIX"))
+}
+
 /// Guest calls nest as native calls, and unoptimized recompiled frames are large.
 const GUEST_STACK: usize = 256 << 20;
 

@@ -1,6 +1,10 @@
 //! Static recompiler: turns the game's PowerPC ELF into Rust source for the `game` crate.
 //!
-//! usage: recomp <game.elf> <hle.txt> <out_dir>
+//! usage: recomp <game.elf> <hle.txt> <out_dir> [game id]
+//!
+//! The game id (GGVE78 unless given) says which version of the game the ELF is. The host's
+//! own knowledge of the game's code and data is by symbol: addresses.txt, beside hle.txt,
+//! names the symbols it needs, and their addresses in this ELF are written out as constants.
 
 mod elf;
 mod emit;
@@ -54,15 +58,65 @@ impl HleRules {
     }
 }
 
+/// Reads addresses.txt: one `NAME symbol` or `NAME symbol+0xOFFSET` per line. A line whose
+/// name ends in `@GAMEID` is for that version alone and takes the place of the plain one.
+/// Returns each name with the symbol it stands for and its address in this ELF.
+fn load_addresses(path: &Path, game_id: &str, elf: &Elf) -> Vec<(String, String, u32)> {
+    let Ok(text) = fs::read_to_string(path) else { return Vec::new() };
+    let mut wanted: BTreeMap<String, (String, bool)> = BTreeMap::new();
+    for line in text.lines() {
+        let line = line.split('#').next().unwrap().trim();
+        let Some((name, place)) = line.split_once(char::is_whitespace) else { continue };
+        let (name, version) = match name.split_once('@') {
+            Some((name, version)) => (name, Some(version)),
+            None => (name, None),
+        };
+        match version {
+            Some(version) if version != game_id => {}
+            Some(_) => drop(wanted.insert(name.to_string(), (place.trim().to_string(), true))),
+            None if wanted.get(name).is_some_and(|entry| entry.1) => {}
+            None => drop(wanted.insert(name.to_string(), (place.trim().to_string(), false))),
+        }
+    }
+    let mut found = Vec::new();
+    let mut missing = false;
+    for (name, (place, _)) in wanted {
+        let (symbol, offset) = match place.rsplit_once("+0x") {
+            Some((symbol, offset)) => (symbol, u32::from_str_radix(offset, 16).expect("bad offset in addresses.txt")),
+            None => (place.as_str(), 0),
+        };
+        let mut values: Vec<u32> = elf.syms.iter().filter(|s| s.name == symbol && s.shndx != 0).map(|s| s.value).collect();
+        values.sort();
+        values.dedup();
+        match values[..] {
+            [value] => found.push((name, place.clone(), value + offset)),
+            [] => {
+                eprintln!("addresses.txt: {name}: this ELF has no symbol {symbol}");
+                missing = true;
+            }
+            _ => {
+                eprintln!("addresses.txt: {name}: this ELF has {} symbols named {symbol}", values.len());
+                missing = true;
+            }
+        }
+    }
+    if missing {
+        std::process::exit(1);
+    }
+    found
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        eprintln!("usage: recomp <game.elf> <hle.txt> <out_dir>");
+    if args.len() != 4 && args.len() != 5 {
+        eprintln!("usage: recomp <game.elf> <hle.txt> <out_dir> [game id]");
         std::process::exit(2);
     }
     let elf = Elf::parse(fs::read(&args[1]).expect("cannot read ELF"));
     let rules = HleRules::load(&args[2]);
     let out_dir = Path::new(&args[3]);
+    let game_id = args.get(4).map_or("GGVE78", |id| id.as_str());
+    let addresses = load_addresses(&Path::new(&args[2]).with_file_name("addresses.txt"), game_id, &elf);
 
     // Functions, keyed by address. Several symbols can alias one address; the first wins.
     let mut funcs: BTreeMap<u32, Func> = BTreeMap::new();
@@ -170,7 +224,14 @@ fn main() {
     for s in elf.syms.iter().filter(|s| s.ty == STT_NOTYPE && !s.name.is_empty()) {
         writeln!(root, "    ({:?}, 0x{:08X}),", s.name, s.value).unwrap();
     }
-    writeln!(root, "];").unwrap();
+    writeln!(root, "];\n\n/// The version of the game this was generated from.").unwrap();
+    writeln!(root, "pub const GAME_ID: &str = {game_id:?};").unwrap();
+    writeln!(root, "\n/// Where this version keeps what the host knows by name (config/addresses.txt).").unwrap();
+    writeln!(root, "pub mod at {{").unwrap();
+    for (name, symbol, value) in &addresses {
+        writeln!(root, "    /// {symbol}\n    pub const {name}: u32 = 0x{value:08X};").unwrap();
+    }
+    writeln!(root, "}}").unwrap();
     fs::write(out_dir.join("mod.rs"), root).unwrap();
 
     let code: u32 = funcs.values().map(|f| f.size).sum();

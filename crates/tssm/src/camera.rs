@@ -18,7 +18,8 @@
 //! The engine's collision pass still runs afterwards, so the camera moves in toward the
 //! character when something is in the way.
 //!
-//! Addresses and offsets below are for this build of the game (GGVE78, revision 1).
+//! The offsets below are into the game's own structures; where its code and variables are
+//! comes from config/addresses.txt.
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
@@ -46,11 +47,11 @@ const TILT_CURRENT: u32 = 0x1E8;
 /// Offset of the position row within a 4x3 matrix.
 const MATRIX_POS: u32 = 0x30;
 
-/// Small-data byte (offset from r13): nonzero while the game lets the player control the camera.
-const INPUT_ENABLED: u32 = 0xFFFF_80DC;
+/// A byte that is nonzero while the game lets the player control the camera.
+const INPUT_ENABLED: u32 = game::at::CAMERA_INPUT_ENABLED;
 
 /// Address range of zCameraUpdate; the goal hooks only act on calls made from inside it.
-const GAMEPLAY_UPDATE: std::ops::Range<u32> = 0x800C_C5B4..0x800C_DCC4;
+const GAMEPLAY_UPDATE: std::ops::Range<u32> = game::at::CAMERA_UPDATE..game::at::CAMERA_UPDATE_END;
 
 /// Radians per mouse count at a sensitivity of 1, for both axes.
 const RADIANS_PER_COUNT: f32 = 0.0015;
@@ -99,7 +100,7 @@ pub fn before_update(c: &mut Ctx) {
     trace_view(c, camera, target, &orbit);
 
     // Cutscenes and the like own the camera, and so does the game itself for a controller.
-    let player_controls = c.r8(c.r[13].wrapping_add(INPUT_ENABLED)) != 0;
+    let player_controls = c.r8(INPUT_ENABLED) != 0;
     if !input::mouse_camera() || !player_controls || !(0x8000_0000..0x8180_0000).contains(&target) {
         orbit.active = false;
         if (0x8000_0000..0x8180_0000).contains(&target) {
@@ -217,7 +218,7 @@ fn trace_view(c: &Ctx, camera: u32, target: u32, orbit: &Orbit) {
         return;
     }
     LAST.store(down.to_bits(), Ordering::Relaxed);
-    let small = |offset: u32| c.r32(c.r[13].wrapping_add(offset));
+    let small = |address: u32| c.r32(address);
     let small_f = |offset: u32| f32::from_bits(small(offset));
     let height = if (0x8000_0000..0x8180_0000).contains(&target) {
         read_f32(c, camera + CAMERA_POS + 4) - read_f32(c, target + MATRIX_POS + 4)
@@ -232,16 +233,16 @@ fn trace_view(c: &Ctx, camera: u32, target: u32, orbit: &Orbit) {
         goals.0,
         goals.1,
         read_f32(c, camera + TILT_CURRENT),
-        small_f(0xFFFF_8B04),
-        small(0xFFFF_8A70),
-        small(0xFFFF_8A84),
-        small(0xFFFF_8A80),
-        small(0xFFFF_8ACC),
-        small_f(0xFFFF_8AD4),
-        small(0xFFFF_8B10),
-        small_f(0xFFFF_8B3C),
-        small(0xFFFF_8AE0),
-        c.r8(c.r[13].wrapping_add(INPUT_ENABLED)),
+        small_f(game::at::CAMERA_PITCH_S),
+        small(game::at::CAMERA_BBOUNCE),
+        small(game::at::CAMERA_HIGHBOUNCE),
+        small(game::at::CAMERA_LONGBOUNCE),
+        small(game::at::CAMERA_STOP_TRACK),
+        small_f(game::at::CAMERA_LASSO_FACTOR),
+        small(game::at::CAMERA_TWEAK_COUNT),
+        small_f(game::at::CAMERA_PITCH),
+        small(game::at::CAMERA_WALL_JUMP),
+        c.r8(INPUT_ENABLED),
         orbit.active,
         orbit.tilt,
     );

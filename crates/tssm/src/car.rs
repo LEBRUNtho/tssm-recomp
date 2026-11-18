@@ -23,7 +23,7 @@ use std::sync::Mutex;
 use runtime::Ctx;
 
 /// zCar::CarUpdate(float dt, float, bool, bool, bool).
-const CAR_UPDATE: u32 = 0x800C_8724;
+const CAR_UPDATE: u32 = game::at::CAR_UPDATE;
 const STEP: f32 = 1.0 / 60.0;
 /// More time than this in one frame is dropped (the game itself limits a frame to 0.1 s).
 const MOST_STEPS: u32 = 6;

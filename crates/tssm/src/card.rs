@@ -188,20 +188,20 @@ fn present(chan: u32) -> bool {
     chan == 0 && !*EMPTY.get_or_init(|| std::env::var_os("TSSM_NO_CARD").is_some())
 }
 
-/// The game's save menu state, in its small data area (offsets from r13): the memory card
+/// The game's save menu state: the memory card
 /// slot chosen on the "Slot A / Slot B" screen and the answer to the prompt on show, both
 /// -1 until the player has chosen.
-const MENU_SLOT: u32 = 0xFFFF_8234;
-const MENU_ANSWER: u32 = 0xFFFF_8E30;
+const MENU_SLOT: u32 = game::at::SAVE_MENU_SLOT;
+const MENU_ANSWER: u32 = game::at::SAVE_MENU_ANSWER;
 /// The answer that means "back".
 const ANSWER_BACK: u32 = 4;
 /// zSaveLoad_DispatchCB(event, float *argument), which hears the menu's buttons, and the
 /// event of a memory card slot being chosen (the argument is the slot).
-const MENU_DISPATCH: u32 = 0x8010_B3BC;
+const MENU_DISPATCH: u32 = game::at::SAVE_MENU_DISPATCH;
 const EVENT_SLOT_CHOSEN: u32 = 171;
 /// Where zSaveLoad_CardPick's call of zSaveLoad_Tick returns to while it waits on the slot
 /// screen.
-const SLOT_SCREEN_WAIT: u32 = 0x8010_F510;
+const SLOT_SCREEN_WAIT: u32 = game::at::SAVE_SLOT_SCREEN_WAIT;
 
 /// How many of the start-up room check's looks for a save file are still to come.
 static ROOM_CHECK_OPENS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -233,12 +233,12 @@ pub fn before_menu(_c: &mut Ctx) {
 /// message), "back" is answered instead, which leaves the menu. Every other frame, and
 /// everything when there is no card (TSSM_NO_CARD), is the game's own.
 pub fn pick_slot_a(c: &mut Ctx) -> bool {
-    let small = |c: &Ctx, offset: u32| c.r32(c.r[13].wrapping_add(offset));
+    let small = |c: &Ctx, address: u32| c.r32(address);
     if c.lr != SLOT_SCREEN_WAIT || !present(0) || small(c, MENU_SLOT) != NONE || small(c, MENU_ANSWER) != NONE {
         return false;
     }
     if SLOT_CHOSEN.swap(true, std::sync::atomic::Ordering::Relaxed) {
-        c.w32(c.r[13].wrapping_add(MENU_ANSWER), ANSWER_BACK);
+        c.w32(MENU_ANSWER, ANSWER_BACK);
         return true;
     }
     // The button's handler also measures the card's free space for the prompts, so call it
