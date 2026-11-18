@@ -22,17 +22,38 @@ use crate::input::{A, DOWN, LEFT, RIGHT, UP};
 use crate::menu::{self, Widget, DIMMED, FOCUS_OFF_UNSELECT, FOCUS_ON_SELECT, IMAGE_WIDGET, TEXT_WIDGET, WIDGET_TEXT};
 
 struct Setting {
-    name: &'static str,
+    /// The setting's name in each of `LANGUAGES`.
+    names: [&'static str; 3],
     values: [u32; 11],
 }
 
+impl Setting {
+    /// The name in the language the game's own settings were last seen in.
+    fn name(&self) -> &'static str {
+        self.names[LANGUAGE.load(std::sync::atomic::Ordering::Relaxed)]
+    }
+}
+
 const SETTINGS: [Setting; 2] = [
-    Setting { name: "Frame Rate", values: [60, 75, 90, 120, 144, 165, 200, 240, 300, 360, 500] },
-    Setting { name: "Field of View", values: [60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110] },
+    Setting {
+        names: ["Frame Rate", "Images/seconde", "Beeldsnelheid"],
+        values: [60, 75, 90, 120, 144, 165, 200, 240, 300, 360, 500],
+    },
+    Setting {
+        names: ["Field of View", "Champ de vision", "Gezichtsveld"],
+        values: [60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110],
+    },
 ];
 
-/// The game's settings, by their texts as they are stored (lower case here).
-const GAME_SETTINGS: [&str; 3] = ["rumble feature", "music volume", "sfx volume"];
+/// The game's settings, by their texts as they are stored (lower case here), in each of the
+/// languages the game comes in: English, and the European version's French and Dutch.
+const LANGUAGES: [[&str; 3]; 3] = [
+    ["rumble feature", "music volume", "sfx volume"],
+    ["vibration", "volume musique", "volume effets"],
+    ["trilfunctie", "muziekvolume", "effectenvolume"],
+];
+/// Which of `LANGUAGES` the game's settings were last seen in.
+static LANGUAGE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 /// Where the game's rows are while the screen is on show (left edge, then each one's top).
 /// The screen slides in and out (up off the top when it is left, its widgets still on show),
 /// and what is drawn here moves with it. A row also bounces while the cursor is on it, which
@@ -234,7 +255,9 @@ pub fn update(c: &mut Ctx, widgets: &[Widget]) -> bool {
     let mut rows = [None; 3];
     for widget in widgets.iter().filter(|w| w.kind == TEXT_WIDGET && w.rect[2] == 240.0) {
         let text = menu::characters(c, c.r32(widget.addr + WIDGET_TEXT)).to_ascii_lowercase();
-        if let Some(i) = GAME_SETTINGS.iter().position(|name| *name == text) {
+        let found = LANGUAGES.iter().enumerate().find_map(|(language, names)| Some((language, names.iter().position(|name| *name == text)?)));
+        if let Some((language, i)) = found {
+            LANGUAGE.store(language, std::sync::atomic::Ordering::Relaxed);
             rows[i] = Some(*widget);
         }
     }
@@ -456,7 +479,7 @@ fn draw(c: &mut Ctx, row: u32) {
     for (i, setting) in SETTINGS.iter().enumerate() {
         let focused = state.focus == Some(i);
         let top = LAYOUT_TOPS[3 + i] + dy - if focused { bounce } else { 0.0 };
-        draw_widget(c, state, row, Some(setting.name), (ROWS_LEFT + dx, top), if focused { 255 } else { DIMMED });
+        draw_widget(c, state, row, Some(setting.name()), (ROWS_LEFT + dx, top), if focused { 255 } else { DIMMED });
     }
     let Some(focus) = state.focus else { return };
     let setting = &SETTINGS[focus];
@@ -464,7 +487,7 @@ fn draw(c: &mut Ctx, row: u32) {
 
     let texts = all_widgets(c, TEXT_WIDGET);
     if let Some(&(title, ..)) = texts.iter().find(|(.., rect)| *rect == TITLE) {
-        draw_widget(c, state, title, Some(setting.name), (TITLE[0] + dx, TITLE[1] + dy), 255);
+        draw_widget(c, state, title, Some(setting.name()), (TITLE[0] + dx, TITLE[1] + dy), 255);
     }
     let word = |x: f32| texts.iter().find(|(.., rect)| rect[0] == x && rect[1] == WORDS_TOP && rect[2] == 100.0).map(|w| w.0);
     if let (Some(low), Some(high)) = (word(WORD_LEFT), word(WORD_RIGHT)) {

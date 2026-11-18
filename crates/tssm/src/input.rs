@@ -818,19 +818,28 @@ pub fn release_all() {
     MOTOR_OFF_AT.store(0, Ordering::Relaxed);
 }
 
-/// Scripted presses as (retrace, bits).
-fn script() -> &'static [(u32, u32)] {
-    static SCRIPT: OnceLock<Vec<(u32, u32)>> = OnceLock::new();
+/// Scripted presses as (retrace, bits, counted from the title screen).
+fn script() -> &'static [(u32, u32, bool)] {
+    static SCRIPT: OnceLock<Vec<(u32, u32, bool)>> = OnceLock::new();
     SCRIPT.get_or_init(|| {
         let spec = std::env::var("TSSM_INPUT").unwrap_or_default();
         spec.split(',')
             .filter_map(|entry| {
                 let (name, at) = entry.trim().split_once(':')?;
-                Some((at.parse().ok()?, action(&name.to_ascii_lowercase())?))
+                // "start:+120" is 120 retraces after the title screen first asks for Start:
+                // how long the movies before it take differs from run to run.
+                let (at, from_title) = match at.strip_prefix('+') {
+                    Some(at) => (at, true),
+                    None => (at, false),
+                };
+                Some((at.parse().ok()?, action(&name.to_ascii_lowercase())?, from_title))
             })
             .collect()
     })
 }
+
+/// The retrace at which the title screen first asked for Start; 0 until it has.
+static TITLE_AT: AtomicU32 = AtomicU32::new(0);
 
 /// Writes controller 1's state as a 12-byte PADStatus. Called once per pad poll.
 pub fn fill_status(status: &mut [u8], retrace: u32) {
@@ -843,8 +852,23 @@ pub fn fill_status(status: &mut [u8], retrace: u32) {
     }
     let keys = if driving { &HELD_DRIVING } else { &HELD };
     let mut held = keys.load(Ordering::Relaxed) | touch.0;
-    for &(at, bit) in script() {
-        if (at..at + SCRIPT_HOLD).contains(&retrace) {
+    // The title screen is there before the movies that play over it are done: it counts
+    // from when it has been drawn for half a second on end.
+    if TITLE_AT.load(Ordering::Relaxed) == 0 && !script().is_empty() {
+        static LAST_FRAME: AtomicU64 = AtomicU64::new(0);
+        static DRAWN: AtomicU32 = AtomicU32::new(0);
+        let frame = crate::host::FRAME_COUNT.load(Ordering::Relaxed) as u64;
+        let drawing = LAST_FRAME.swap(frame, Ordering::Relaxed) != frame && crate::menu::on_title();
+        let drawn = if drawing { DRAWN.fetch_add(1, Ordering::Relaxed) + 1 } else { DRAWN.swap(0, Ordering::Relaxed) * 0 };
+        if drawn >= 30 {
+            TITLE_AT.store(retrace, Ordering::Relaxed);
+            eprintln!("[input] title screen at retrace {retrace}");
+        }
+    }
+    let title_at = TITLE_AT.load(Ordering::Relaxed);
+    for &(at, bit, from_title) in script() {
+        let at = if from_title { title_at + at } else { at };
+        if (!from_title || title_at != 0) && (at..at + SCRIPT_HOLD).contains(&retrace) {
             held |= bit;
         }
     }
