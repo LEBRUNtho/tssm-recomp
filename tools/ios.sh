@@ -17,9 +17,7 @@
 #   SIGN_IDENTITY="Apple Development: ..."   SIGN_TEAM=XXXXXXXXXX
 #   SIGN_PROFILE=/path/to/profile.mobileprovision   BUNDLE_PREFIX=com.example
 set -e
-for settings in "$HOME/.config/tssm-ios/signature.sh" "$HOME/.config/oncle-ernest/signature.sh"; do
-  [ -f "$settings" ] && { source "$settings"; break; }
-done
+[ -f "$HOME/.config/tssm-ios/signature.sh" ] && source "$HOME/.config/tssm-ios/signature.sh"
 BUNDLE_PREFIX=${BUNDLE_PREFIX:-com.example}
 ROOT=${0:A:h:h}
 SOURCE=${1:?disc image (.iso, .gcm) or extracted disc folder}
