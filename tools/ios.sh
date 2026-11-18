@@ -85,10 +85,7 @@ xcrun strip -x "$APP/tssm"
 if [[ $MODE = sim* ]]; then PLATFORM=iossim; else PLATFORM=ios; fi
 xcrun vtool -set-build-version $PLATFORM $MIN_IOS $LEGACY_SDK -replace -output "$APP/tssm" "$APP/tssm" 2>/dev/null
 sed -e "s/@BUNDLE_ID@/$BUNDLE_ID/" -e "s/@MIN_IOS@/$MIN_IOS/" tools/ios/Info.plist > "$APP/Info.plist"
-# The name under the icon: the game's own title in the version's language, unless given.
-case $VERSION in
-  eur) : ${APP_NAME:="Bob l'éponge"};;
-esac
+# The name under the icon, unless given. iOS shows about a dozen characters whole.
 [ -n "$APP_NAME" ] && plutil -replace CFBundleDisplayName -string "$APP_NAME" "$APP/Info.plist"
 # The icon is the game's own badge, taken from the disc, unless one is given.
 if [ -n "$ICON" ]; then cp "$ICON" "$OUT/icon-$VERSION.png"; else python3 tools/ios/icon.py "$DISC" "$OUT/icon-$VERSION.png"; fi
